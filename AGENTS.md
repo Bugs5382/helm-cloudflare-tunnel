@@ -25,6 +25,8 @@ Things to understand before changing it:
 - `examples/` - example values for users.
 - `scripts/check-chart.sh` - lint, render and kubeconform; used by `task check` and CI.
 - `.github/workflows/job-chart-ci.yaml` - the chart check on non-draft PRs.
+- `.github/workflows/job-chart-publish.yaml` - on a published release only: checks the tag against
+  `Chart.yaml` `version`, pushes the chart to `ghcr.io/bugs5382/charts`, attaches the package.
 
 ## Build, test, lint
 

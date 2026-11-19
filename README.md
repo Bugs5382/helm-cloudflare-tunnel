@@ -34,6 +34,13 @@ tunnel:
 helm install cloudflared ./charts/helm-cloudflare-tunnel -n cloudflare -f examples/minimal.yaml
 ```
 
+Or from the OCI registry, once a release is published:
+
+```bash
+helm install cloudflared oci://ghcr.io/bugs5382/charts/helm-cloudflare-tunnel --version X.Y.Z \
+  -n cloudflare --set tunnel.tokenSecret.name=cloudflared-token
+```
+
 The origin in Cloudflare is the in-cluster Service name, for example `http://app.default.svc.cluster.local:80`.
 
 ## Configuration
@@ -117,7 +124,7 @@ CI runs the same checks (`scripts/check-chart.sh`) on every non-draft pull reque
 
 ## Releases
 
-Merged pull requests feed a release-drafter draft. The maintainer bumps `version` (and `appVersion` when the cloudflared pin moves) in `Chart.yaml`, then publishes the GitHub Release by hand, which creates the tag. Nothing tags automatically.
+Merged pull requests feed a release-drafter draft. The maintainer bumps `version` (and `appVersion` when the cloudflared pin moves) in `Chart.yaml`, then publishes the GitHub Release by hand, which creates the tag. Nothing tags automatically. Publishing the release runs the Chart Publish workflow: it checks that the tag matches the `Chart.yaml` version, packages the chart, pushes it to `ghcr.io/bugs5382/charts/helm-cloudflare-tunnel` and attaches the package to the release. The first push creates a private package; set it public once under the package settings on GitHub.
 
 ## License
 
