@@ -30,3 +30,7 @@ rules:
   quoted-strings: disable
   trailing-spaces: enable
   truthy: disable
+
+# Helm templates are Go templates, not plain YAML.
+ignore: |
+  charts/*/templates/

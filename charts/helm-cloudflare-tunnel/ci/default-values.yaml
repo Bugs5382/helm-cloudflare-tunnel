@@ -1,0 +1,3 @@
+tunnel:
+  tokenSecret:
+    name: cloudflared-token

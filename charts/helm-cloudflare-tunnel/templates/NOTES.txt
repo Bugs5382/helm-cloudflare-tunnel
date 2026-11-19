@@ -1,0 +1,11 @@
+cloudflared is deployed as {{ include "cft.fullname" . }} ({{ include "cft.image" . }}).
+
+{{- if .Values.config.enabled }}
+Ingress comes from the local ConfigMap {{ include "cft.configName" . }}.
+{{- else }}
+Ingress is configured remotely in Cloudflare (the tunnel token mode). Add public hostnames to the tunnel in the Cloudflare dashboard.
+{{- end }}
+
+Check the connectors:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "cft.fullname" . }}
