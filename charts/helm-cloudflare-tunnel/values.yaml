@@ -1,0 +1,173 @@
+# Default values for helm-cloudflare-tunnel. Every default is production-safe.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: cloudflare/cloudflared
+  # An exact version. Empty uses the chart appVersion. Never "latest".
+  tag: ""
+  # Optional. When set, the image is pulled by digest as well: repository:tag@digest.
+  # Use the digest of the multi-arch index (linux/amd64 and linux/arm64) so every node architecture works.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+tunnel:
+  # The tunnel token is read from an existing Secret. The chart never takes the token inline and never
+  # creates the Secret.
+  tokenSecret:
+    # Required: the name of the Secret.
+    name: ""
+    key: token
+
+# Locally managed ingress. Off by default: the usual setup is a remotely managed tunnel, where the
+# public hostnames are set in Cloudflare and the pod only carries the connection.
+# Turn it on for a tunnel whose ingress is kept in this chart instead (a tunnel created with the
+# cloudflared CLI).
+config:
+  enabled: false
+  # Rules in order; the first match wins. Each needs a service, and usually a hostname.
+  # - hostname: app.example.org
+  #   service: http://app.default.svc.cluster.local:80
+  #   path: ""
+  #   originRequest: {}
+  ingress: []
+  # The catch-all rule, which is required last.
+  defaultService: http_status:404
+  # Skip TLS verification of every origin. Leave off; prefer a trusted certificate.
+  noTLSVerify: false
+
+replicaCount: 2
+
+# Used instead of replicaCount when enabled.
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: null
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+# json and error in a cluster; set console and debug while developing.
+logging:
+  level: error
+  format: json
+
+metrics:
+  # The port cloudflared serves /metrics and /ready on.
+  port: 2000
+  service:
+    # A ClusterIP Service for the metrics port (created for a ServiceMonitor too).
+    enabled: false
+  serviceMonitor:
+    enabled: false
+    # Defaults to the release namespace.
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    # Extra labels, for example the release label a Prometheus selects on.
+    labels: {}
+
+# /ready answers 200 once the connector holds a connection to the Cloudflare edge.
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+# Off by default; for example { periodSeconds: 5, failureThreshold: 30 }.
+startupProbe: {}
+
+podDisruptionBudget:
+  enabled: true
+  # Set minAvailable instead (a number or a percent) to use it; otherwise maxUnavailable applies.
+  minAvailable: ""
+  maxUnavailable: 1
+
+# Spread the connectors over nodes, so one node loss keeps the tunnel up.
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: ScheduleAnyway
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Off by default. When on, the pods may reach cluster DNS and the Cloudflare edge, and nothing else
+# unless listed in extraEgress. Needs a CNI that enforces NetworkPolicy.
+networkPolicy:
+  enabled: false
+  dns:
+    namespaceLabels:
+      kubernetes.io/metadata.name: kube-system
+    # Narrow it to the DNS pods, for example { k8s-app: kube-dns }.
+    podLabels: {}
+  edge:
+    cidr: 0.0.0.0/0
+    except:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+    # 7844 is the tunnel protocol (QUIC over UDP, HTTP/2 over TCP); 443 is the Cloudflare API.
+    ports:
+      - protocol: TCP
+        port: 7844
+      - protocol: UDP
+        port: 7844
+      - protocol: TCP
+        port: 443
+  # The target services, as raw NetworkPolicy egress rules, for example:
+  # - to:
+  #     - podSelector:
+  #         matchLabels:
+  #           app.kubernetes.io/name: app
+  #   ports:
+  #     - protocol: TCP
+  #       port: 8080
+  extraEgress: []
+  # Who may scrape the metrics port. Empty adds no ingress policy.
+  metricsIngress:
+    from: []
+
+podAnnotations: {}
+podLabels: {}
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+revisionHistoryLimit: 3
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Extra cloudflared arguments (before "run") and environment variables.
+extraArgs: []
+extraEnv: []

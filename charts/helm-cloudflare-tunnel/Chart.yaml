@@ -1,0 +1,19 @@
+apiVersion: v2
+name: helm-cloudflare-tunnel
+description: Runs a Cloudflare Tunnel (cloudflared) connector, authenticated by a tunnel token kept in an existing Secret.
+type: application
+version: 1.0.0
+# The pinned cloudflared release this chart deploys by default (image tag).
+appVersion: "2026.11.1"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/Bugs5382/helm-cloudflare-tunnel
+sources:
+  - https://github.com/Bugs5382/helm-cloudflare-tunnel
+  - https://github.com/cloudflare/cloudflared
+keywords:
+  - cloudflare
+  - cloudflared
+  - tunnel
+maintainers:
+  - name: Bugs5382
+    url: https://github.com/Bugs5382

@@ -1,0 +1,45 @@
+name: Chart CI
+# Pull requests only, and not while the PR is a draft; the PR run covers what merges, so nothing
+# reruns on push to main. One job: lint, render and kubeconform share the same setup, and a job is
+# billed for at least a minute.
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  chart:
+    name: ⎈ Helm lint, template, kubeconform
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+      # Prebuilt kubeconform, pinned and checked against the published SHA-256. Runners may be amd64
+      # or arm64, and the binary goes under $RUNNER_TEMP.
+      - name: Install kubeconform
+        env:
+          VERSION: v0.8.0
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            aarch64|arm64) TARGET=linux-arm64; SHA256=1f53fc8e81258197a35e8603054162a5af1de8c5af13746c71ab680d9534ed87 ;;
+            *)             TARGET=linux-amd64; SHA256=9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883 ;;
+          esac
+          tarball="${RUNNER_TEMP}/kubeconform-${TARGET}.tar.gz"
+          curl -sSfL -o "$tarball" \
+            "https://github.com/yannh/kubeconform/releases/download/${VERSION}/kubeconform-${TARGET}.tar.gz"
+          echo "${SHA256}  ${tarball}" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/bin"
+          tar -xzf "$tarball" -C "${RUNNER_TEMP}/bin" kubeconform
+          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
+      - name: ⎈ Helm version
+        run: helm version --short
+      - name: ✅ Lint, render, validate
+        run: ./scripts/check-chart.sh

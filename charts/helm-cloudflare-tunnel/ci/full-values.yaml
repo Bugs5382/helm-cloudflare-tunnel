@@ -1,0 +1,46 @@
+image:
+  digest: sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d
+tunnel:
+  tokenSecret:
+    name: cloudflared-token
+    key: token
+config:
+  enabled: true
+  ingress:
+    - hostname: app.example.org
+      service: http://app.default.svc.cluster.local:80
+    - hostname: api.example.org
+      path: /v1/.*
+      service: https://api.default.svc.cluster.local:443
+      originRequest:
+        connectTimeout: 10s
+metrics:
+  service:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: monitoring
+autoscaling:
+  enabled: true
+startupProbe:
+  periodSeconds: 5
+  failureThreshold: 30
+networkPolicy:
+  enabled: true
+  dns:
+    podLabels:
+      k8s-app: kube-dns
+  extraEgress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: app
+      ports:
+        - protocol: TCP
+          port: 80
+  metricsIngress:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: monitoring

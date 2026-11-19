@@ -1,54 +1,28 @@
 version: '3'
 vars:
-  ARTIFACT_NAME: helm-cloudflare-tunnel
-  TESTPARALLELISM: 4
-  GOLIC_VERSION: v0.3.0
-  GOLANGCI_VERSION: v2.12.2
-  COMMON_LIC: "2026 Shane"
-  TEMPLATE_LIC: "mit"
+  CHART_DIR: charts/helm-cloudflare-tunnel
 tasks:
   default:
     cmds:
-      - task: lint
-  fmt:
-    desc: Format Go sources
-    cmds:
-      - gofmt -w .
-      - goimports -w ./
-  build:
-    desc: Build all packages
-    cmds:
-      - go build ./...
-  test:
-    desc: Run tests
-    cmds:
-      - go test -parallel {{.TESTPARALLELISM}} ./...
-  test-cover:
-    desc: Run tests with coverage reporting
-    cmds:
-      - go test ./... -cover
+      - task: check
   lint:
-    desc: Run all linters
-    deps: [test]
+    desc: Lint the chart (helm lint, strict) and the YAML files
     cmds:
       - |
-        unformatted="$(gofmt -l .)"
-        if [ -n "$unformatted" ]; then echo "gofmt needed on:"; echo "$unformatted"; exit 1; fi
-      - golangci-lint run
+        for f in {{.CHART_DIR}}/ci/*.yaml; do
+          helm lint --strict {{.CHART_DIR}} -f "$f"
+        done
+      - yamllint .
+  template:
+    desc: Render the chart with the default CI values
+    cmds:
+      - helm template check {{.CHART_DIR}} -f {{.CHART_DIR}}/ci/default-values.yaml
+  check:
+    desc: Lint, render with every CI values file, and validate with kubeconform (same as CI)
+    cmds:
+      - ./scripts/check-chart.sh
       - yamllint .
   lint-init:
-    desc: Install lint dependencies (golangci-lint is built with the local Go toolchain)
+    desc: Install the tools the checks need
     cmds:
-      - brew install gitleaks yamllint
-      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_VERSION}}
-      - go install golang.org/x/tools/cmd/goimports@latest
-  license:
-    desc: Verify every source file carries the MIT license header (CI; never writes).
-    cmds:
-      - go install github.com/Bugs5382/golic/cmd/golic@{{.GOLIC_VERSION}}
-      - golic inject -t {{.TEMPLATE_LIC}} -c "{{.COMMON_LIC}}" --dry -x
-  license:fix:
-    desc: Inject the MIT header into any source file missing it.
-    cmds:
-      - go install github.com/Bugs5382/golic/cmd/golic@{{.GOLIC_VERSION}}
-      - golic inject -t {{.TEMPLATE_LIC}} -c "{{.COMMON_LIC}}"
+      - brew install helm kubeconform gitleaks yamllint actionlint

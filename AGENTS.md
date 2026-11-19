@@ -5,36 +5,32 @@ hook-enforced rules). Keep this file current when the build, layout, or public A
 
 ## What this is
 
-Helm chart that runs a Cloudflare Tunnel (cloudflared) for a Kubernetes workload.
+A standalone Helm chart (`charts/helm-cloudflare-tunnel`) that runs a Cloudflare Tunnel (cloudflared)
+connector. It is consumed by other charts and releases as a plain chart; there is no Go code.
 
-<!-- Fill in: what the project does, what it ships (library, service, action, CLI), and the one or
-two things an agent must understand before changing it. -->
+Things to understand before changing it:
 
-## Using helm-cloudflare-tunnel
-
-<!-- If this project is consumed by others (a library/plugin/action), describe the contract a
-consumer must respect: the single entry point, the public surface, required options, and anything
-that must not be bypassed. Delete this section for a leaf application. -->
+- The tunnel token is only ever read from an existing Secret (`tunnel.tokenSecret`). Never add an
+  inline token value or a Secret template.
+- The image is an exact tag (default: the chart `appVersion`) with an optional digest. `latest` is
+  rejected by the template and the schema. When the cloudflared pin moves, change `appVersion` in
+  `Chart.yaml` and update the digest example in `README.md`.
+- Ingress is remotely managed in Cloudflare by default; `config.*` is the optional locally managed
+  mode. `config.noTLSVerify` stays off by default.
 
 ## Layout
 
-<!-- The directories that matter and what lives in each. Keep it short; point at the entry points. -->
-
-- `src/` - <what>
-- `<tests dir>/` - <what>
+- `charts/helm-cloudflare-tunnel/` - the chart: `Chart.yaml`, `values.yaml`, `values.schema.json`,
+  `templates/`, and `ci/*.yaml` (values files that CI renders; add one per new feature switch).
+- `examples/` - example values for users.
+- `scripts/check-chart.sh` - lint, render and kubeconform; used by `task check` and CI.
+- `.github/workflows/job-chart-ci.yaml` - the chart check on non-draft PRs.
 
 ## Build, test, lint
 
-<!-- The exact commands. Pull these from package.json scripts (npm), the Taskfile (Go/Task), or
-pyproject (Python) so they stay accurate. -->
-
-- Build: `<command>`
-- Test: `<command>` (note any service/fixture the integration tests require)
-- Lint: `<command>`
-- Package checks (npm packages), after a build: `npm run check:pack` (contents and ceiling),
-  `npm run check:pack:growth` (growth against the last release), `npm run check:install`
-  (install the tarball, import ESM and CJS); see CLAUDE.md "npm package contents"
-- License headers / docs: `<command>`
+- Check everything: `task check` (needs helm, kubeconform, yamllint; `task lint-init` installs them)
+- Render: `task template`
+- Keep `values.yaml`, `values.schema.json` and the README values table in step.
 
 ## Logging
 
@@ -56,4 +52,6 @@ Follow the logging rules in `CLAUDE.md`. In short:
   `.claude/hooks` (run `bash .claude/hooks/install.sh` once per clone).
 - Open every PR as a draft. CI skips drafts, so run the full checks locally, push once they pass,
   and mark the PR ready when the work is finished; see CLAUDE.md "CI and Actions minutes".
-- <project-specific conventions, non-obvious constraints, and traps an agent should know>
+- The chart ships no Go code; the Go scaffold files were removed. Do not reintroduce `go.mod` or golic.
+- Chart `version` and `appVersion` are bumped by hand in `Chart.yaml` before the maintainer publishes a
+  release; nothing tags automatically.

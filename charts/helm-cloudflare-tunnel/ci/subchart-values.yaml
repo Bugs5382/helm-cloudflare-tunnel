@@ -1,0 +1,7 @@
+# Values a parent chart passes down: global, and the enabled flag of a dependency condition.
+global:
+  env: prod
+enabled: true
+tunnel:
+  tokenSecret:
+    name: cloudflared-token

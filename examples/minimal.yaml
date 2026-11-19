@@ -1,0 +1,5 @@
+# The smallest working install: a remotely managed tunnel. The Secret holds the tunnel token:
+#   kubectl -n cloudflare create secret generic cloudflared-token --from-literal=token=<TOKEN>
+tunnel:
+  tokenSecret:
+    name: cloudflared-token

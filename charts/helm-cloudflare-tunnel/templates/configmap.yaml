@@ -1,0 +1,32 @@
+{{- if .Values.config.enabled }}
+{{- if empty .Values.config.ingress }}
+{{- fail "config.enabled needs at least one entry in config.ingress" }}
+{{- end }}
+{{- $rules := list }}
+{{- range .Values.config.ingress }}
+{{- if not .service }}
+{{- fail "every config.ingress entry needs a service" }}
+{{- end }}
+{{- $r := dict "service" .service }}
+{{- if .hostname }}{{ $_ := set $r "hostname" .hostname }}{{ end }}
+{{- if .path }}{{ $_ := set $r "path" .path }}{{ end }}
+{{- if .originRequest }}{{ $_ := set $r "originRequest" .originRequest }}{{ end }}
+{{- $rules = append $rules $r }}
+{{- end }}
+{{- /* The catch-all rule must come last. */}}
+{{- $rules = append $rules (dict "service" .Values.config.defaultService) }}
+{{- $cfg := dict "ingress" $rules }}
+{{- if .Values.config.noTLSVerify }}
+{{- $_ := set $cfg "originRequest" (dict "noTLSVerify" true) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cft.configName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cft.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- toYaml $cfg | nindent 4 }}
+{{- end }}

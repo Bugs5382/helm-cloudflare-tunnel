@@ -1,6 +1,0 @@
-# GoLic, for more details see: https://github.com/Bugs5382/golic
-# Ignore everything
-*
-
-# But inject license into Go sources...
-!*.go
