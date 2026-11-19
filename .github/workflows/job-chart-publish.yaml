@@ -1,0 +1,96 @@
+name: Chart Publish
+# Publishes the chart as an OCI artifact to ghcr.io/bugs5382/charts and attaches the packaged chart
+# to the release. Runs only when the maintainer publishes a GitHub Release by hand: nothing here runs
+# on a push, a merge or a pull request (the PR checks package the chart as a dry run).
+#
+# A release event runs this file from the tagged commit, so a fix here can't reach a tag that already
+# exists. Dispatching it from main with that tag runs this version of the workflow against the tag's
+# code.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The published release to run again, such as v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chart-publish
+  cancel-in-progress: false
+
+env:
+  HELM_VERSION: v4.2.0
+  HELM_SHA256: 97dbeb971be4ac4b27e3839976d9564c0fb35c6f3b1da89dd1e292d236af4096
+  CHART_DIR: charts/helm-cloudflare-tunnel
+  CHART_OCI: oci://ghcr.io/bugs5382/charts
+
+jobs:
+  publish:
+    name: 🚀 Publish the chart (OCI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: 📥 Checkout the release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+
+      - name: 🔢 Release version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = false ] || { echo "::error::$TAG is not a published release"; exit 1; }
+          [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::release tag $TAG is not vX.Y.Z"; exit 1; }
+          chart_version="$(sed -n 's/^version: *//p' "${CHART_DIR}/Chart.yaml" | tr -d '"' | head -n1)"
+          [ "$chart_version" = "${TAG#v}" ] || { echo "::error::Chart.yaml version ${chart_version} does not match the tag ${TAG}"; exit 1; }
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: 🔧 Install helm
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"; cd "$RUNNER_TEMP"
+          curl -fsSLo helm.tgz "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          echo "${HELM_SHA256}  helm.tgz" | sha256sum -c -
+          tar -xzf helm.tgz --strip-components=1 -C "$bin" linux-amd64/helm
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: 🧪 Lint and package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          helm lint --strict "${CHART_DIR}" -f "${CHART_DIR}/ci/default-values.yaml"
+          mkdir -p "$RUNNER_TEMP/package"
+          helm package "${CHART_DIR}" -d "$RUNNER_TEMP/package"
+          test -f "$RUNNER_TEMP/package/helm-cloudflare-tunnel-${VERSION}.tgz"
+
+      - name: 🔑 Sign in to ghcr.io
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: 🗃️ Push the chart to ghcr.io (OCI)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          helm push "$RUNNER_TEMP/package/helm-cloudflare-tunnel-${VERSION}.tgz" "$CHART_OCI"
+          helm show chart "${CHART_OCI}/helm-cloudflare-tunnel" --version "${VERSION}" | grep -q "^version: ${VERSION}$"
+          echo "Pushed ${CHART_OCI}/helm-cloudflare-tunnel:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 📦 Attach the chart to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: gh release upload --clobber "$TAG" "$RUNNER_TEMP"/package/*.tgz

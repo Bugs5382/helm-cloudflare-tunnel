@@ -34,4 +34,12 @@ if helm template check "${CHART_DIR}" -f "${values_files[0]}" --set image.tag=la
   echo "render with image.tag=latest unexpectedly succeeded" >&2
   exit 1
 fi
+# Dry run of the release packaging: the chart must package, under the name the publish job pushes.
+echo "==> helm package (dry run)"
+pkg_dir="$(mktemp -d)"
+trap 'rm -rf "$pkg_dir"' EXIT
+helm package "${CHART_DIR}" -d "${pkg_dir}" >/dev/null
+chart_version="$(sed -n 's/^version: *//p' "${CHART_DIR}/Chart.yaml" | tr -d '"' | head -n1)"
+test -f "${pkg_dir}/helm-cloudflare-tunnel-${chart_version}.tgz" \
+  || { echo "packaged chart is not helm-cloudflare-tunnel-${chart_version}.tgz" >&2; exit 1; }
 echo "chart checks passed"
